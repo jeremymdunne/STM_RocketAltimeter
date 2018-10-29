@@ -35,7 +35,7 @@ int SdStorage::getFileName(String *name){
 int SdStorage::writeData(String data){
   //long startM = micros();
   //Serial.println("Writing " + data);
-  if(buffIndex + data.length() + 1 >= SD_BUFFER_SIZE){
+  if(buffIndex + data.length() + 1 >= SD_BUFFER_SIZE | (true)){
   //if(true){
     //Serial.println("Wririntg to sd card");
     flightData.write(writeBuff,buffIndex);

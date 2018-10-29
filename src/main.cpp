@@ -2,6 +2,9 @@
 #include <BMP280.h>
 #include <CircularFloatBuffer.h>
 #include <SdStorage.h>
+#include <MPU9250_IMU.h>
+MPU9250_IMU::MPU_IMU_DATA data;
+MPU9250_IMU imu;
 
 // Datasheet: https://cdn-shop.adafruit.com/datasheets/BST-BMP280-DS001-11.pdf
 
@@ -9,7 +12,7 @@ SdStorage fileStorage;
 BMP280 bmp;
 CircularFloatBuffer *recentAltitudeBuffer;
 float baselinePressure = 0;
-int ledPin = PC13;
+int ledPin = PA0;
 
 float determineBaselinePressure(){
   //try to smooth out the pressure altitude readings
@@ -60,7 +63,7 @@ void setup() {
     // put your setup code here, to run once:
     recentAltitudeBuffer = new CircularFloatBuffer(5);
     pinMode(ledPin, OUTPUT);
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(2000);
     if(bmp.begin() == 0){
       Serial.println("BMP Connected");
@@ -82,25 +85,42 @@ void setup() {
       }
       while(true);
     }
-
+    if(imu.begin(200, 0) != 0){
+      Serial.println("Init failed!");
+      while(true);
+    }
     bmp.setFilter(BMP280::Filter_16);
     delay(200);
     baselinePressure = 101325;
     digitalWrite(ledPin,HIGH);
     //filter(0);
 }
-
+long lastTime = 0;
+float linearAcceleration = 0;
+float runningAcceleration = 0;
 void loop() {
     // put your main code here, to run repeatedly:
     long start = micros();
-    float newAltitude = bmp.getAltitudeFromBaselinePressure(baselinePressure);
-    float filteredAlt = filter(newAltitude);
-    fileStorage.writeData("A"+String(newAltitude)+";" + String(millis())+";");
-    //fileStorage.writeData();
-    Serial.println(micros() - start);
-    Serial.println("Raw Altitude: " + String(newAltitude));
-    Serial.println("Filtered Altitude: " + String(filteredAlt));
-    delay(1000/80.0);
+    imu.getData(&data);
+    linearAcceleration = pow(pow(data.accel[0],2) + pow(data.accel[1],2) + pow(data.accel[2],2),0.5);
+    runningAcceleration += linearAcceleration;
+    runningAcceleration/=2.0;
+    if(millis()-lastTime > 1000/20.0){
+      float newAltitude = bmp.getAltitudeFromBaselinePressure(baselinePressure);
+      //float filteredAlt = filter(newAltitude);
+      fileStorage.writeData("A"+String(newAltitude)+";" + String(millis())+";");
+      //fileStorage.writeData();
+      Serial.println(micros() - start);
+      Serial.println("Raw Altitude: " + String(newAltitude));
+      lastTime = millis();
+      Serial.println("Acceleration: " + String(runningAcceleration,4));
+      runningAcceleration = linearAcceleration;
+      fileStorage.writeData("G"+String(runningAcceleration,4)+";"+String(millis())+";");
+    }
+
+
+    //Serial.println("Filtered Altitude: " + String(filteredAlt));
+    delay(2);
 
 
 }
